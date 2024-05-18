@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System.Text;
 
 namespace AccountProvider.Functions;
 
@@ -44,22 +45,31 @@ public class Verify(ILogger<Verify> logger, UserManager<UserAccount> userManager
 			if (vr != null && !string.IsNullOrEmpty(vr.Email) && !string.IsNullOrEmpty(vr.VerifactionCode))
 			{
 				// Verify code using verificationprovider
-
-				var isVerified  = true;
-				if (isVerified)
+				try
 				{
-					var userAccount = await _userManager.FindByEmailAsync(vr.Email);
-					if (userAccount != null)
-					{
-						userAccount.EmailConfirmed = true;
-						await _userManager.UpdateAsync(userAccount);
+					using var http = new HttpClient();
+					StringContent content = new StringContent(JsonConvert.SerializeObject(vr), Encoding.UTF8, "application/json");
+					// var response = await http.PostAsync("https://verificationprovider-silicon-js.azurewebsites.net/api/verify", content);
 
-						if (await _userManager.IsEmailConfirmedAsync(userAccount))
+					if (true) // response.IsSuccessStatusCode
+					{
+						var userAccount = await _userManager.FindByEmailAsync(vr.Email);
+						if (userAccount != null)
 						{
-							return new OkResult();
+							userAccount.EmailConfirmed = true;
+							await _userManager.UpdateAsync(userAccount);
+
+							if (await _userManager.IsEmailConfirmedAsync(userAccount))
+							{
+								return new OkResult();
+							}
 						}
 					}
 				}
+				catch (Exception ex)
+				{
+					_logger.LogError($"ERROR : Run.Verification :: {ex.Message}");
+				}				
 			}
 		}
 
